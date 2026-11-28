@@ -34,6 +34,12 @@ function Write-Section([string]$Title) {
     Write-Host " =====================================================================" -ForegroundColor Red
 }
 
+function Search-File([string]$Path, [string]$Pattern) {
+    if (-not (Test-Path $Path)) { return }
+    Select-String -Path $Path -Pattern $Pattern -ErrorAction SilentlyContinue |
+        ForEach-Object { Write-Host "$($_.Filename):$($_.LineNumber): $($_.Line)" }
+}
+
 function Search-Java([string]$Dir, [string]$Pattern) {
     if (-not (Test-Path $Dir)) { return }
     $files = Get-ChildItem -Recurse -Filter '*.java' -Path $Dir -ErrorAction SilentlyContinue
@@ -68,7 +74,7 @@ $apk       = (Resolve-Path $ApkPath).Path
 $apkBase   = $apk -replace '\.apk$', ''
 
 # Dependency check
-$deps = @('apktool', 'd2j-dex2jar', 'jadx', 'baksmali')
+$deps = @('java', 'apktool', 'd2j-dex2jar', 'jadx', 'baksmali')
 foreach ($dep in $deps) {
     if (-not (Get-Command $dep -ErrorAction SilentlyContinue)) {
         Write-Host " Command '$dep' not found." -ForegroundColor Red
@@ -120,31 +126,31 @@ Write-Section "Displaying AndroidManifest.xml"
 if (Test-Path $manifest) { Get-Content $manifest }
 
 Write-Section "Displaying Package Info in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'package=' }
+Search-File $manifest 'package='
 
 Write-Section "Displaying Activities in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'activity ' }
+Search-File $manifest 'activity '
 
 Write-Section "Displaying Services in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'service ' }
+Search-File $manifest 'service '
 
 Write-Section "Displaying Content Providers in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'provider' }
+Search-File $manifest 'provider'
 
 Write-Section "Displaying Broadcast Receivers in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'receiver' }
+Search-File $manifest 'receiver'
 
 Write-Section "Displaying Intent Filter Actions in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'action|category' }
+Search-File $manifest 'action|category'
 
 Write-Section "Displaying Permissions in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'android\.permission' }
+Search-File $manifest 'android\.permission'
 
 Write-Section "Displaying Exports in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'exported="true"' }
+Search-File $manifest 'exported="true"'
 
 Write-Section "Displaying Backups in AndroidManifest.xml"
-if (Test-Path $manifest) { Select-String -Path $manifest -Pattern 'backup' }
+Search-File $manifest 'backup'
 
 # Device Info
 Write-Section "Searching for DeviceId references"
@@ -171,8 +177,10 @@ Search-Java $jadxDir 'log\.d|Log\.'
 
 # Content Providers
 Write-Section "Displaying Content Providers"
-Get-ChildItem -Recurse "${apkBase}*" -ErrorAction SilentlyContinue |
-    Select-String -Pattern 'content://' -ErrorAction SilentlyContinue
+Get-ChildItem -Recurse "${apkBase}*" -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -match '\.(xml|java|smali|txt|json|html|properties|gradle)$' } |
+    Select-String -Pattern 'content://' -ErrorAction SilentlyContinue |
+    ForEach-Object { Write-Host "$($_.Filename):$($_.LineNumber): $($_.Line)" }
 Search-Java $jadxDir '://'
 
 # Broadcast Receivers
